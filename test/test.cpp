@@ -4,5 +4,5 @@
 
 int main()
 {
-  vector_test();
+  VectorTest();
 }

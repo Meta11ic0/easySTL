@@ -3,11 +3,9 @@
 #include "test.h"
 #include "vector.h"
 
-void vector_test()
+void VectorTest()
 {
-  std::cout << "[===============================================================]\n";
-  std::cout << "[----------------- Run container test : vector -----------------]\n";
-  std::cout << "[-------------------------- API test ---------------------------]\n";
+  std::cout << "[----------------- vector test -----------------]\n";
   int a[] = { 1,2,3,4,5 };
   easystl::vector<int> v1;
   easystl::vector<int> v2(10);
@@ -58,9 +56,7 @@ void vector_test()
   FUN_AFTER(v1, v1.clear());
   FUN_VALUE(v1.size());
   FUN_VALUE(v1.capacity());
-
-  PASSED;
-  std::cout << "[----------------- End container test : vector -----------------]\n";
+  std::cout << "[----------------- End -----------------]\n";
 }
 
 
