@@ -2,12 +2,11 @@
 #define EASYSTL_ALLOCATOR_H_
 
 #include <cstdlib>
-#include <new>
 
-namespace easystl{
+namespace easystl {
 // malloc allocator
 // directly use malloc and free to manage memory
-class MallocAllocator{
+class MallocAllocator {
  public:
   static void* Allocate(size_t size) {
     void *result = malloc(size);
@@ -40,15 +39,15 @@ class MallocAllocator{
 
 void (*MallocAllocator::CustomerOomHandler)() = nullptr;
 
-void* MallocAllocator::MallocInOom(size_t size){
+void* MallocAllocator::MallocInOom(size_t size) {
   void (*my_malloc_handler)();
   void *result;
-  while(true){
+  while(true) {
     my_malloc_handler = CustomerOomHandler;
     // if CustomerOomHandler do not be setted 
-    // just throw and exit 
-    if(0==my_malloc_handler) { 
-      throw std::bad_alloc();
+    // just exit
+    if(nullptr==my_malloc_handler) { 
+      std::abort();
     };
     (*my_malloc_handler)();
     result = malloc(size);
@@ -56,14 +55,14 @@ void* MallocAllocator::MallocInOom(size_t size){
   }
 }
 
-void* MallocAllocator::ReallocInOom(void *obj, size_t size){
+void* MallocAllocator::ReallocInOom(void *obj, size_t size) {
   void (*my_malloc_handler)();
   void *result;
-  while(true){
+  while(true) {
     my_malloc_handler = CustomerOomHandler;
     // same as MallocInOom
-    if(0==my_malloc_handler) { 
-      throw std::bad_alloc();
+    if(nullptr==my_malloc_handler) { 
+      std::abort();
     };
     (*my_malloc_handler)();
     result = realloc(obj, size);
@@ -75,8 +74,7 @@ void* MallocAllocator::ReallocInOom(void *obj, size_t size){
 // in order to save space
 // every node will use itself 
 // to be the pointer to the next
-class MemoryPoolList
-{
+class MemoryPoolList {
  public:
   bool Empty() const { return node_ == nullptr; }
   void*& GetNextNode(void *node) { return *static_cast<void**>(node); }
@@ -84,7 +82,7 @@ class MemoryPoolList
     GetNextNode(node) = node_;
     node_ = node;
   }
-  void* Pop(){
+  void* Pop() {
     void *result = node_;
     node_ = GetNextNode(result);
     return result;
@@ -100,20 +98,22 @@ static constexpr int kMaxBytes = 128;
 static constexpr int kFreeListNum = kMaxBytes/kAlign;
 
 // memory pool allocator
-class MememoryPoolAllocator{
+class MemoryPoolAllocator {
  public:
   static void* Allocate(size_t size) {
-    if(size > size_t(kMaxBytes)) { return MallocAllocator::Allocate(size); };
-    size_t index = GetFreelistIndex(size);
-    if (freelist_[index].Empty()){
-        return ReFill(RoundUp(size));
+    if(size > size_t(kMaxBytes)) { 
+      return MallocAllocator::Allocate(size); 
     }
-    else{
-        return freelist_[index].Pop();
+    size_t index = GetFreelistIndex(size);
+    if (freelist_[index].Empty()) {
+      return ReFill(RoundUp(size));
+    }
+    else {
+      return freelist_[index].Pop();
     }
   }
   static void Deallocate(void *obj, size_t size) {
-    if(size>kMaxBytes){
+    if(size>kMaxBytes) {
       MallocAllocator::Deallocate(obj, size);
       return ;
     }
@@ -135,7 +135,7 @@ class MememoryPoolAllocator{
   // refill freespace 
   static void* ReFill(size_t size);
   // get new chunk to freespace
-  static char* ChunkAlloc(size_t size, int &numsofchunk);
+  static char* ChunkAlloc(size_t size, size_t &chunknums);
 
   static MemoryPoolList freelist_[kFreeListNum];
   static char *freespacestart_;
@@ -143,14 +143,14 @@ class MememoryPoolAllocator{
   static size_t mallocoffset_;
 };
 
-char * MememoryPoolAllocator::freespacestart_ = nullptr;
-char * MememoryPoolAllocator::freespaceend_ = nullptr;
-size_t MememoryPoolAllocator::mallocoffset_ = 0;
-MemoryPoolList MememoryPoolAllocator::freelist_[kFreeListNum];
+char * MemoryPoolAllocator::freespacestart_ = nullptr;
+char * MemoryPoolAllocator::freespaceend_ = nullptr;
+size_t MemoryPoolAllocator::mallocoffset_ = 0;
+MemoryPoolList MemoryPoolAllocator::freelist_[kFreeListNum];
 
-char* MememoryPoolAllocator::ChunkAlloc(size_t size, int &numsofchunk) {
+char* MemoryPoolAllocator::ChunkAlloc(size_t size, size_t &chunknums) {
   char *result;
-  size_t bytesneed = size * numsofchunk;
+  size_t bytesneed = size * chunknums;
   size_t bytesleft =  freespaceend_ - freespacestart_;
   if (bytesleft >= bytesneed) {
     result  = freespacestart_;
@@ -158,8 +158,8 @@ char* MememoryPoolAllocator::ChunkAlloc(size_t size, int &numsofchunk) {
     return result;
   }
   else if (bytesleft >= size) {
-    numsofchunk = bytesleft/size;
-    bytesneed = numsofchunk * size;
+    chunknums = bytesleft/size;
+    bytesneed = chunknums * size;
     result = freespacestart_;
     freespacestart_ += bytesneed;
     return result;
@@ -175,7 +175,7 @@ char* MememoryPoolAllocator::ChunkAlloc(size_t size, int &numsofchunk) {
         if(!freelist_[GetFreelistIndex(i)].Empty()) {
             freespacestart_ = (char*)freelist_[GetFreelistIndex(i)].Pop();
             freespaceend_ = freespacestart_ + i;
-            return ChunkAlloc(size, numsofchunk);
+            return ChunkAlloc(size, chunknums);
         }
       }
       freespaceend_ = nullptr;
@@ -183,27 +183,27 @@ char* MememoryPoolAllocator::ChunkAlloc(size_t size, int &numsofchunk) {
     }
     mallocoffset_ += bytesget;
     freespaceend_ = freespacestart_ + bytesget;
-    return ChunkAlloc(size, numsofchunk);
+    return ChunkAlloc(size, chunknums);
   }
 }
 
-void* MememoryPoolAllocator::ReFill(size_t size) {
-    int numsofchunk = 20;
-    char *chunk = ChunkAlloc(size, numsofchunk);
-    char *nextchunk = chunk + size;
-    if(numsofchunk == 1) {
-        return chunk;
-    }
-    for (int i = 1; i < numsofchunk; ++i) {
-        freelist_[GetFreelistIndex(size)].Push(nextchunk);
-        nextchunk += size;
-    }
+void* MemoryPoolAllocator::ReFill(size_t size) {
+  size_t chunknums = 20;
+  char *chunk = ChunkAlloc(size, chunknums);
+  char *nextchunk = chunk + size;
+  if(chunknums == 1) {
     return chunk;
+  }
+  for (int i = 1; i < chunknums; ++i) {
+    freelist_[GetFreelistIndex(size)].Push(nextchunk);
+    nextchunk += size;
+  }
+  return chunk;
 }
 
 #define USEMALLOC
 #ifdef USEMALLOC
-using Allo = MememoryPoolAllocator;
+using Allo = MemoryPoolAllocator;
 #else
 using Allo = MallocAllocator;
 #endif

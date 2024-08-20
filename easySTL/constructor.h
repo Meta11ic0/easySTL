@@ -3,8 +3,7 @@
 
 #include <new>
 
-namespace easystl
-{
+namespace easystl {
 
 template<class T> 
 inline void Construct(T* p) { new(p) T(); }
@@ -16,7 +15,7 @@ template<class T>
 inline void Destroy(T* p) { p->~T(); }
 
 template<class ForwardIterator>
-inline void Destroy(ForwardIterator first, ForwardIterator last){
+inline void Destroy(ForwardIterator first, ForwardIterator last) {
   for(; first != last; ++first) {
     Destroy(&*first);
   }
