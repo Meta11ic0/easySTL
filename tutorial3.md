@@ -159,11 +159,11 @@ STL迭代器的设计非常巧妙，它们通过重载一系列操作符，使�
 
 为啥要有这些类型别名呢？我们带着这个问题来看下一小节。
 
-### 3.3 `iterator_traits` 的引入
+### 3.3 `traits` 的引入
 
-为了使算法能够适用于不同类型的迭代器，STL引入了 `iterator_traits` 机制。`iterator_traits` 是一个模板类，通过类型萃取（type traits）访问迭代器的类型信息。这样，算法可以不依赖具体的迭代器类型，而是通过 `iterator_traits` 来获取所需的类型信息。
+为了使算法能够适用于不同类型的迭代器，STL引入了 `traits` 机制。`traits` 是一个模板类，通过类型萃取（type traits）访问迭代器的类型信息。这样，算法可以不依赖具体的迭代器类型，而是通过 `traits` 来获取所需的类型信息。
 
-以下是 `iterator_traits` 的一个简单实现：
+以下是针对`iterator`的`iterator_traits` 的一个简单实现：
 
 ```cpp
 template <typename Iterator>
