@@ -6,27 +6,31 @@
 
 | 路径 | 内容 |
 | --- | --- |
-| `easySTL/` | 核心实现头文件 |
-| `test/` | 示例与测试入口 |
+| `easySTL/` | 容器、算法、迭代器，以及给容器用的 `AllocatorWrapper` |
+| `pool/` | 内存池。公开头文件是 `include/allocator.h`，实现是 `allocator.cpp`，Makefile 生成 `libeasypool.so` |
+| `test/` | 整体测试。编译时加上内存池的头文件路径，并链接 `libeasypool.so` |
 | `tutorial1.md` 至 `tutorial4.md` | STL、分配器、迭代器和 vector 学习笔记 |
 | [known-issues.md](known-issues.md) | 已知问题、复现方式与验证记录 |
 | [AGENTS.md](AGENTS.md) | AI 协作的项目背景、实现约定和验证要求 |
 
-## 构建与运行
+## 构建
 
-需要 CMake 和支持 C++14 的编译器。当前没有第三方库依赖。在项目根目录执行：
+需要 GNU make 和支持 C++14 的编译器。当前没有第三方库依赖。在项目根目录执行：
 
 ```bash
-cmake -S . -B build -DCMAKE_CXX_STANDARD=14 -DCMAKE_CXX_STANDARD_REQUIRED=ON
-cmake --build build
-./bin/stltest
+make          # 只编 libeasypool.so
+make test     # 编内存池并运行整体测试
+make clean
+make install PREFIX=/usr/local
 ```
 
-当前 CMake 配置固定把可执行文件输出到项目根目录的 `bin/`；`build/` 和 `bin/` 已加入忽略规则。多配置生成器可能在 `bin/` 下生成对应配置子目录，运行时需调整路径。
+`pool/` 可以单独构建，不依赖 `easySTL/`。`vector.h` 包含同目录的 `allocator.h`，后者再用 `#include <allocator.h>` 找到内存池。因此 `-I pool/include` 必须写在 `-I easySTL` 前面，否则会包含到容器侧的包装头。
 
-测试入口调用 `VectorTest()`，主要通过打印容器内容演示行为，尚未注册 CTest 测试，也没有完整的自动断言。运行完成不等于所有容器行为正确。
+```bash
+g++ -std=c++14 -I pool/include -I easySTL app.cpp -L pool -leasypool
+```
 
-2026-10-21 初始化验证：在 GNU C++ 13.3.0、C++14 配置下构建成功，编译器报告范围 `insert` 缺少返回值；执行 `./bin/stltest` 的退出码为 132，未正常完成。本次未确认该运行失败的具体原因。既有缺陷的独立记录见 [known-issues.md](known-issues.md)。
+安装后内存池头文件在 `PREFIX/include/easypool/allocator.h`，容器头文件在 `PREFIX/include/easystl/`，动态库在 `PREFIX/lib/`。使用时把上面的两个 `-I` 换成这两个安装目录，`-leasypool` 不变。测试通过只说明当前用例成立，不表示容器行为全部正确。已知缺陷见 [known-issues.md](known-issues.md)。
 
 ## 参与修改
 

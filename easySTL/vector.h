@@ -1,6 +1,8 @@
 #ifndef EASYSTL_VECTOR_H_
 #define EASYSTL_VECTOR_H_
 
+#include <type_traits>
+#include <initializer_list>
 #include "allocator.h"
 #include "constructor.h"
 #include "iterator.h"

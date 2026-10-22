@@ -1,21 +1,7 @@
-# 独立构建目录及当前 CMake 可执行文件输出目录
-/build/
-/build-*/
-/cmake-build-*/
-/bin/
-
-# CMake 生成文件（也覆盖误用源码内构建的情况）
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-CTestTestfile.cmake
-Testing/
-compile_commands.json
-/Makefile
-/test/Makefile
-CMakeUserPresets.json
-
-# 编译、调试与覆盖率产物
+# 当前 Make 构建产物
+/pool/libeasypool.so
+/test/stltest
+/test/*.d
 *.o
 *.obj
 *.a
@@ -25,11 +11,26 @@ CMakeUserPresets.json
 *.dll
 *.exe
 *.pdb
+
+# 覆盖率
 *.gcda
 *.gcno
 *.gcov
 *.profraw
 *.profdata
+
+# 已经不用 CMake。这些规则只用来挡住以前留下的文件，避免误提交
+/build/
+/build-*/
+/cmake-build-*/
+/bin/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+CMakeUserPresets.json
 
 # 本地编辑器配置和会话历史
 /.vscode/

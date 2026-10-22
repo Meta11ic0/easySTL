@@ -1,7 +1,8 @@
 # easySTL 已知问题与验证记录
 
-> 整理日期：2026-10-21。基于当前源码的完整静态读取及有限编译、运行和定向复现。
+> 整理日期：2026-10-21。基于当时源码的完整静态读取及有限编译、运行和定向复现。
 > 扫描时 HEAD：`a7d7d23f79f65291a19ed8e12e3a9249e23553af`。后续源码变化后，需要重新核对位置和结论。
+> 2026-10-22：CMake 已移除。内存池的实体定义在 `pool/allocator.cpp`，由 `pool/Makefile` 生成 `libeasypool.so`。`test/` 是后来补上的整体测试，用 `-I ../pool/include` 找到 `allocator.h`。下文里的文件路径和行号仍是 2026-10-21 的记录，不能直接当作当前源码位置。
 > 本文是问题入口，尚未实施修复。下列优先级是建议处理顺序，不要求一次完成全部项目。
 
 ## 从哪里开始
@@ -25,7 +26,7 @@
 | E03 | 高 | 拷贝赋值对未构造空间做赋值 | 非平凡类型已复现 |
 | E04 | 高 | 范围 insert 缺少返回值 | 编译器警告、UBSan 已复现 |
 | E05 | 中 | 扩容后的 insert 返回旧位置；区间 erase 返回值也需核对 | insert 已复现；erase 为静态发现 |
-| E06 | 中 | allocator 头文件在多个编译单元中产生重复定义 | 链接错误已复现 |
+| E06 | 中 | allocator 头文件在多个编译单元中产生重复定义 | 2026-10-22 两份源文件链接通过，见该条 |
 | E07 | 中 | noexcept、abort 与异常恢复策略没有区分 | 静态发现，支持范围待明确 |
 | E08 | 中 | 泛型接口实际支持的类型和迭代器较有限 | 静态发现，支持范围待明确 |
 | E09 | 中 | 内存池的重分配、对齐和线程安全边界不完整 | 静态发现，待专项验证 |
@@ -139,21 +140,17 @@ Destroy(end_);
 
 ## E06：多编译单元重复定义
 
-状态：**已复现／待修复**。
+状态：**已修复**。2026-10-22。
 
-位置：[allocator.h](easySTL/allocator.h) 的类外函数定义和静态成员定义，扫描时包括 40、42、58、146—149 行附近。
+位置：实体定义已移到 [pool/allocator.cpp](pool/allocator.cpp)。`MallocInOom`、`ReallocInOom`、`CustomerOomHandler`、`freelist_`、`freespacestart_`、`freespaceend_`、`mallocoffset_`、`ChunkAlloc`、`ReFill` 只在这个文件里定义，并编进 `libeasypool.so`。
 
-多个 `.cpp` 同时包含该头文件时，会重复定义相同符号。两个源文件分别包含 vector 头文件并链接，实测报 `multiple definition`，涉及 MallocInOom、CustomerOomHandler、内存池状态等。
-
-修复时选择一致的组织方式：将适合单独定义的内容移至源文件，或在选定 C++ 标准下采用合适的 inline／模板组织。头文件保护宏只能防止同一编译单元内重复包含，不能解决跨编译单元的重复定义。
-
-验收需要至少两个独立 `.cpp` 一起链接；只编译当前单个 test.cpp 不够。
+验证：两个源文件各自包含 `vector.h` 后分别编译，再和 `libeasypool.so` 链接。编译前额外包含了 `<type_traits>` 和 `<initializer_list>`，因为 `vector.h` 自己还没有包含这两份标准头（见 E08）。链接没有出现 `multiple definition`，程序退出码为 0。这次只构造了很小的 `vector<int>`，没有覆盖 E01 的扩容错误。
 
 ## E07：异常策略需要明确
 
 状态：**静态发现／待验证；范围待明确**。
 
-位置：[vector.h](easySTL/vector.h)、[algo.h](easySTL/algo.h)、[uninitialized.h](easySTL/uninitialized.h)、[allocator.h](easySTL/allocator.h)。
+位置：[vector.h](easySTL/vector.h)、[algo.h](easySTL/algo.h)、[uninitialized.h](easySTL/uninitialized.h)、[allocator.h](pool/include/allocator.h)。
 
 多个执行分配、拷贝构造或赋值的接口声明为 noexcept；一旦元素操作抛异常，将终止程序。未初始化构造的异常分支会清理已构造对象后直接 abort，而不是让调用方处理错误。当前不能宣称支持一般可恢复异常安全。
 
@@ -169,7 +166,7 @@ Destroy(end_);
 - RangeInit、assign、范围 insert 直接使用 `last - first`，实际上依赖随机访问能力。
 - 范围 insert 的部分路径默认构造 `T()` 再赋值，对非默认可构造类型有额外限制。
 - 当前 vector 缺少 const 访问重载及移动／仅移动类型的完整支持，不应写成与 std::vector 等价。
-- vector 头中使用 enable_if_t、initializer_list，但没有直接包含对应标准头；现有测试可能通过先包含其他头掩盖依赖，需做单头文件编译验证。
+- vector 头已直接包含 `<type_traits>` 和 `<initializer_list>`。2026-10-22 用只包含 `vector.h` 的源文件、并按 `-I pool/include -I easySTL` 编译通过。其余类型组合仍未逐一编译测试。
 
 这些项目可以先声明支持范围，再逐步扩展，不要求实现完整标准库。上述类型组合和头文件自包含尚未逐一编译测试。
 
@@ -177,7 +174,7 @@ Destroy(end_);
 
 状态：**静态发现／待专项验证**。
 
-位置：[allocator.h](easySTL/allocator.h)。
+位置：[allocator.h](pool/include/allocator.h)。
 
 - Reallocate 在大小类别变化时释放旧空间再分配，未保留旧内容；若要提供类似 realloc 的语义，需要核对并修正契约。当前 vector 扩容未直接调用这一接口，不能把它当作 E01 的根因。
 - 小块池按 8 字节分组，未形成对任意过度对齐类型的支持保证。
