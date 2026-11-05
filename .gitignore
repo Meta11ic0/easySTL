@@ -1,4 +1,6 @@
 # 当前 Make 构建产物
+/learning/build/
+/learning/build-sanitize/
 /pool/libeasypool.so
 /test/stltest
 /test/*.d

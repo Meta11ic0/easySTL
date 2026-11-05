@@ -1,37 +1,25 @@
 # easySTL
 
-用于学习 STL 实现的 C++ 项目，包含内存分配器、对象构造与析构、迭代器、基础算法和 `easystl::vector`。当前实现仍有已知缺陷，不代表完整的标准库兼容实现。
+用于学习现代 C++ 的小型 STL 重写项目，目标是实现容器、可替换的分配后端以及自动验证测试。
 
-## 目录
+旧版源码、构建、测试和文档保存在 Git 提交 `f18416a` 中。新实现从零按步骤推进，由 AI 分步实现，学习者阅读、review 并验证理解。
 
-| 路径 | 内容 |
-| --- | --- |
-| `easySTL/` | 容器、算法、迭代器，以及给容器用的 `AllocatorWrapper` |
-| `pool/` | 内存池。公开头文件是 `include/allocator.h`，实现是 `allocator.cpp`，Makefile 生成 `libeasypool.so` |
-| `test/` | 整体测试。编译时加上内存池的头文件路径，并链接 `libeasypool.so` |
-| `tutorial1.md` 至 `tutorial4.md` | STL、分配器、迭代器和 vector 学习笔记 |
-| [known-issues.md](known-issues.md) | 已知问题、复现方式与验证记录 |
-| [AGENTS.md](AGENTS.md) | AI 协作的项目背景、实现约定和验证要求 |
+## 当前入口
 
-## 构建
+- [学习计划](modern-cpp-learning-plan.md)：按分配后端、内存池、对象操作、迭代器、算法和 vector 组织的八个阶段，包含前置知识、伪代码和验证要求。
+- [协作说明](AGENTS.md)：教学方式与实现约定。
+- `learning/`：生命周期与原始存储实验，通过 Makefile 编译运行。
+- 旧问题记录：用 `git show f18416a:known-issues.md` 查阅，供新设计逐项对照。
 
-需要 GNU make 和支持 C++14 的编译器。当前没有第三方库依赖。在项目根目录执行：
+## 构建与运行
+
+需要 GNU make 和支持 C++14 的编译器。在根目录运行：
 
 ```bash
-make          # 只编 libeasypool.so
-make test     # 编内存池并运行整体测试
-make clean
-make install PREFIX=/usr/local
+make -C learning
+make -C learning run
 ```
 
-`pool/` 可以单独构建，不依赖 `easySTL/`。`vector.h` 包含同目录的 `allocator.h`，后者再用 `#include <allocator.h>` 找到内存池。因此 `-I pool/include` 必须写在 `-I easySTL` 前面，否则会包含到容器侧的包装头。
+两个实验分别展示自动生命周期和原始存储上的显式构造/析构，失败时返回非零。它们共用 `learning/tracked.h`，不依赖内存池。
 
-```bash
-g++ -std=c++14 -I pool/include -I easySTL app.cpp -L pool -leasypool
-```
-
-安装后内存池头文件在 `PREFIX/include/easypool/allocator.h`，容器头文件在 `PREFIX/include/easystl/`，动态库在 `PREFIX/lib/`。使用时把上面的两个 `-I` 换成这两个安装目录，`-leasypool` 不变。测试通过只说明当前用例成立，不表示容器行为全部正确。已知缺陷见 [known-issues.md](known-issues.md)。
-
-## 参与修改
-
-修改前阅读 [AGENTS.md](AGENTS.md) 及相关已知问题。修复容器行为时用可自动判定结果的用例验证；涉及对象生命周期时不能只测试 `int`。教程可能与源码不同步，具体接口以当前实现为准。
+根目录尚无统一 Makefile，正式容器、分配后端和回归测试按计划逐步实现。
