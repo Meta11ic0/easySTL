@@ -1,9 +1,8 @@
-# 当前 Make 构建产物
-/learning/build/
-/learning/build-sanitize/
-/pool/libeasypool.so
-/test/stltest
-/test/*.d
+# 构建产物
+/build/
+/build-*/
+/bin/
+*.d
 *.o
 *.obj
 *.a
@@ -21,11 +20,8 @@
 *.profraw
 *.profdata
 
-# 已经不用 CMake。这些规则只用来挡住以前留下的文件，避免误提交
-/build/
-/build-*/
+# 其他构建工具产物
 /cmake-build-*/
-/bin/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
