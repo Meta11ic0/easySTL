@@ -2,10 +2,10 @@
 
 ## 当前进度
 
-- 当前阶段：围绕阶段一继续讨论和优化教程可读性；已有 SimpleAllocator 实现与验证，当前不推进后续代码。
-- 代码状态：allocator.h 已加入头文件保护与 easystl 命名空间；test/allocator_test.cpp 已建立，新增 test/vector_reserve_demo.cpp 用于观察标准库行为；根 Makefile 初版已编写，准备转入 WSL 验证；AllocatorWrapper 尚未实现。
-- review 状态：学习者要求用简单 C++ 程序观察 reserve 后没有 string 元素的情况。标准库短实验已编译运行，检查 size 与容量、at(0) 越界，以及日志类型的构造析构次数；这不计为 easySTL 容器功能完成，学习者理解仍待反馈。
-- 下一步：在 WSL 中核验 `make run` 和 `make run NAME=allocator_test`，再逐行讲解 vector_reserve_demo.cpp 和 Makefile。逐行讲解尚未完成；继续停留在存储空间与元素构造的实验，不推进类型适配代码，不把实验通过视为学习者已掌握。
+- 当前阶段：边动手实践、边优化教程，围绕阶段一及开头的存储与对象示例推进；保留 SimpleAllocator 实现，学习者尚未完成其测试，当前不推进后续代码。
+- 代码状态：allocator.h 已加入头文件保护与 easystl 命名空间；学习者已删除 test/allocator_test.cpp，test/vector_reserve_demo.cpp 用于观察标准库行为；test/Makefile 使用 demo 作为当前运行入口；AllocatorWrapper 尚未实现。
+- review 状态：当前实验仅对照空 vector 的 reserve 与 new 数组，观察容量、默认构造和析构次数；不计为 easySTL 容器功能完成，学习者理解仍待反馈。
+- 下一步：逐行讲解 vector_reserve_demo.cpp 和 Makefile；SimpleAllocator 测试由学习者后续重新开展。逐行讲解尚未完成；继续停留在存储空间与元素构造的实验，不推进类型适配代码，不把实验通过视为学习者已掌握。
 
 ## 记录
 
@@ -143,5 +143,49 @@
 - 环境与范围：当前 Windows 有 GCC 14.2.0，但没有已安装的 make；查询 WSL 列表时报 E_ACCESSDENIED，无法在当前会话验证 WSL。曾尝试取得官方 MSYS2 GNU Make，普通网络请求失败；经网络授权重试后下载及 SHA256 校验完成，临时文件仅在已忽略的 build/tools/ 中。学习者决定改用 WSL 后不再继续 Windows Make 验证，清理本次临时下载，不修改系统 PATH。
 - 当前实现：Makefile 输出为 build/ 下无 .exe 后缀的文件，避免 WSL 误用 Windows 可执行文件；README 与 PLAN 已同步用法及尚未验证的状态。短实验仍只有此前 Windows 手动编译运行通过的结果，Makefile 编译运行、增量依赖与失败传播均待 WSL 验证，逐行讲解尚未交付。
 - 暂存边界：本次仅获授权执行 Git 暂存，不执行 commit。代码与文档的阅读、理解仍待学习者 review；`git diff --check` 通过。
+
+### 2026-11-07：明确边实践边优化的协作方式
+
+- 反馈：学习者较久没有实际操作相关代码，希望在存储与对象示例附近提供可选小测试，并重新考虑后续实验的统一构建方式。
+- 核对与改动：开始时工作区无修改；已有 reserve 实验和通过 NAME 选择程序的根 Makefile。AGENTS.md 增加当前学习方式、从实际疑问改进教程、可选短实验及共用根 Makefile 的规则；PLAN 将已有实验明确标为可选，保留原有代码和运行命令。
+- 构建组织：沿用根 Makefile 与 test/ 目录，通过 NAME 选择用途明确的不同程序，暂不增加 test/Makefile 或统一改名为 demo。本次未改构建接口，后续可按实际使用反馈调整。
+- 验证与下一步：`git diff --check` 通过，修改限于三份文档；未运行编译测试，既有 Makefile 的 WSL 验证及逐行讲解仍待完成。继续停留在当前实验，不新增学习者已理解的结论。
+
+### 2026-11-07：统一 demo 入口并简化实验说明
+
+- 按学习者纠正更新当前状态：SimpleAllocator 测试尚未由学习者完成，原 test/allocator_test.cpp 已由学习者删除。此前 AI 执行的验证记录保留为历史，不作为学习者完成测试的依据。
+- 根 Makefile 增加 `make demo` 编译运行入口，保留 `make run` 别名；通过命令行 NAME 选择不同程序，各自生成 build/ 下同名文件。首次运行发现环境 NAME 覆盖默认值而查找错误文件，改用普通赋值设置默认值，仍允许命令行覆盖。
+- PLAN 的可选实验改为三个观察任务，删除环境说明、手动编译命令及构建验证叙述；README 同步统一命令和实际状态。
+- 验证：`make demo NAME=vector_reserve_demo`、修正后的 `make demo` 和 `make run` 均通过，输出 All checks passed，编译无警告；再次运行复用已有产物。`make -n demo NAME=missing_demo` 按预期因源文件不存在返回非零，确认命令行选择仍生效；`git diff --check` 通过。未运行已删除的分配器测试或诊断器，逐行讲解与学习者 review 仍待进行。
+
+### 2026-11-07：将当前 Makefile 移入 test/
+
+- 按学习者要求，将现有 Makefile 整体移至 test/，根目录当前不保留 Makefile；根目录统一入口留待后续阶段建立。
+- 调整源码路径为当前目录，头文件路径为 ../easystl/include，产物和依赖文件路径为 ../build/。仅加载所选程序的依赖文件，保留 all、demo、run 和命令行 NAME 选择方式。
+- 同步 AGENTS.md、README 和 PLAN 的当前路径及命令，历史记录保留原操作背景。
+- 验证：根目录执行 `make -C test demo` 和显式指定 NAME 的运行均通过；在 test/ 执行 `make demo` 通过，输出 All checks passed。首次重新编译无警告，后续复用产物；`git diff --check` 通过。未新增测试代码或运行诊断器，未推进分配器测试。
+
+### 2026-11-07：按学习框架调整可选实验写法
+
+- 学习者明确最终交付为从零实践的学习框架，读者可能没有任何 cpp 文件或目录；当前工作区实验不能作为教程预置资源。
+- PLAN 将可选实验移至 new string[4] 及其与 reserve 的构造时机对比之后，改成自行编写程序的观察任务，删除现成源码链接及运行入口说明。AGENTS.md 明确这种写作风格与交付前提；README 去掉本地实验入口和现成构建命令，改为创建任务的阅读说明。
+- 范围与验证：仅修改文档，保留当前源码和 test/Makefile，不执行删除或 Git 写操作；检查实验顺序与现成文件链接，`git diff --check` 通过。未运行编译测试，未新增理解结论。
+
+### 2026-11-08：缩小 reserve 与 new 数组的对照实验
+
+- 按学习者要求，实验只保留空 vector 的 reserve(4) 与 new 数组两个过程。删除显式拷贝构造、string 内容检查、at 越界和添加元素分支，保留默认构造、析构计数与失败退出；数组先 delete[] 清理，再判断结果。
+- PLAN 的可选任务同步缩小为两个过程，不依赖现成源码。旧问题参考已查阅，保留生命周期检查和明确失败判据，不访问未构造对象。
+- 验证：`make -C test demo` 编译无警告，退出码为0。实测 reserve 后 size=0、capacity=4、构造和析构次数均为0；new 数组构造与 delete[] 析构各4次。容量检查仍为至少4，不依赖恰好4；`git diff --check` 通过。未运行其他模块测试或诊断器，未记录学习者已掌握。
+
+### 2026-11-08：显示 reserve 部分的析构次数
+
+- 按学习者反馈，在空 vector 离开作用域后打印 destructions，直接展示析构次数为0；保留原有失败检查。
+- 验证：`make -C test demo` 编译无警告、退出码为0，reserve 部分输出 destructions=0，数组部分输出 destructions=4；`git diff --check` 通过。未运行其他模块测试。
+
+### 2026-11-08：区分教程交付与个人实践
+
+- 学习者明确最终交付方向为参考答案目录与 README、PLAN、AGENTS、record 等文档；读者通常按教程实践，只维护个人学习记录，不需要重复作者当前的教程优化过程。
+- 修改 PLAN 的“如何阅读和推进”，明确教程与个人记录的职责；目录说明区分最终交付结构和读者逐步创建的练习结构。参考目录暂名 reference/，尚未建立。README 与 AGENTS 同步约定。
+- 本次仅修改文档，未迁移或删除源码，未生成完整参考答案或重置历史学习记录。`git diff --check` 通过；未运行编译测试。
 
 后续每完成一个小步骤或结束一次相关讨论，更新当前进度，并记录改动、实际验证、已确认的理解及待解决问题；没有发生的项目不必填写。保留重要问题的处理结果，不抄录完整聊天。
