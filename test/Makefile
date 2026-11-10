@@ -1,7 +1,7 @@
 CXX := g++
 CPPFLAGS := -I ../easystl/include
 CXXFLAGS := -std=c++20 -Wall -Wextra -Wpedantic -MMD -MP
-NAME := vector_reserve_demo
+NAME := storage_lifetime_demo
 TARGET := ../build/$(NAME)
 
 .PHONY: all demo run
