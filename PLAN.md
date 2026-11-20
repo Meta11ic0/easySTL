@@ -23,7 +23,7 @@ STL 是 Standard Template Library（标准模板库）的简称。入门时，�
 
 例如，创建 std::vector 后，可以通过迭代器把其中一段元素交给排序算法，并指定比较规则。调用者无需逐次安排内存申请、元素搬移和析构，但仍可以查询容量、定制比较规则或选择分配器。相关组件可对照 [SGI STL 文档目录](https://stl.boost.org/table_of_contents.html)。
 
-STL 也不等于整个 C++ 标准库；标准库还包含输入输出、并发等其他部分，完整分类见标准草案的 [标准库组成](https://eel.is/c++draft/library.general)。
+STL 也不等于整个 C++标准库；标准库还包含输入输出、并发等其他部分，完整分类见标准草案的 [标准库组成](https://eel.is/c++draft/library.general)。
 
 本项目逐步实现下文约定的 vector 接口，范围小于 std::vector。前期直接使用标准分配器和单对象构造、销毁工具，自己编写数量与容量管理、扩容、复制、插入删除和异常清理逻辑。阶段四实现自制迭代器、iterator_traits 及遍历工具；后续实现普通分配器、独立内存池与 allocator_traits。赋值和比较等基础算法可按需练习。函数对象及 stack 等适配器暂不单独实现。
 
@@ -60,7 +60,7 @@ push_back 在末尾追加元素，insert 在指定位置插入，erase 删除指
 | erase 删除元素 | 把后面的元素向前调整，销毁多出的尾部对象，并减少元素数量 |
 | names 离开作用域 | 销毁仍然保存在容器中的元素，再释放容器持有的存储空间 |
 
-表中的修改操作可对照 C++ 标准草案的 [std::vector 修改操作](https://eel.is/c++draft/vector.modifiers)。中途失败时的清理会在后续实现中逐步处理。
+表中的修改操作可对照 C++标准草案的 [std::vector 修改操作](https://eel.is/c++draft/vector.modifiers)。中途失败时的清理会在后续实现中逐步处理。
 
 回看 names 从创建到第二次 push_back 的状态，观察预留空间与构造元素的区别：
 
@@ -204,6 +204,12 @@ easySTL 与 easypool 两个库互不依赖，仅集成测试同时使用它们�
 
 ## 三、分阶段实现
 
+第三节实现的公开接口，行为对标 C++20 标准库中的对应接口。`easystl::vector` 对标 `std::vector`。后文的迭代器、普通分配器和简化 allocator_traits，对标 C++20 草案里本项目实际编写的那一部分。后文引用的标准条文以 C++20 草案 N4861 为准。
+
+对标包括调用前提、返回值、异常和未定义行为。例如，下标 `operator[]`、`front()` 和 `back()` 由调用者保证合法，vector 不检查：下标必须小于 `size()`，调用 `front()` 或 `back()` 时容器里必须已经有元素；前提不成立时行为未定义，标准没有规定返回值。`at(i)` 由 vector 检查，`i >= size()` 时抛出 `std::out_of_range`。const 版本与对应的非 const 版本使用同一前提。这几项见 C++20 草案的[序列容器要求](https://timsong-cpp.github.io/cppwp/n4861/sequence.reqmts)。
+
+本项目实现的接口少于标准库。某个操作采用本项目自己的策略时，正文会在该操作旁写明。例如，容量不足时 `reserve(n)` 成功后容量等于 `n`，而 `std::vector::reserve(n)` 只保证容量至少为 `n`。没有这样写明的接口，按 C++20 的对应接口实现。easypool 是独立内存池，不实现标准容器接口。
+
 ### 3.1 阶段一：基本存储与追加
 
 #### 3.1.1 整体目标
@@ -229,13 +235,7 @@ easySTL 与 easypool 两个库互不依赖，仅集成测试同时使用它们�
       reserve、push_back(const T&)、pop_back、clear
 ```
 
-本阶段由 vector 调用前文介绍的三个标准工具：需要新空间时，调用 `alloc.allocate(n)`，取得能容纳 n 个 T 元素的存储；需要在某个位置创建元素时，调用 `std::construct_at`；删除元素时，调用 `std::destroy_at`。整块存储不再使用时，vector 先销毁其中仍存活的元素，再调用 `alloc.deallocate(p, n)`，按原申请数量 n 归还空间。分配器不记录哪些位置已经构造了元素，也不会在归还空间时替 vector 销毁它们；这些状态和操作顺序需要我们在 vector 内部管理。
-
-三个指针分别记录存储起点、已有元素的末尾和容量边界。下文伪代码中的 begin、end、capacity_end 指这些内部指针；公开接口仍命名为 begin()、end()，避免实际成员重名。
-
-空状态的数量直接返回0，不对两个空指针做减法或形成 nullptr+0。下标与 front/back 由调用者保证位置有效；at 对越界抛 out_of_range，pop_back 只用于非空容器。先实现一个接口再验证，不一次补齐表中全部功能。
-
-析构只销毁 [begin,end) 内的对象，持有非空存储时才按 capacity 调用 deallocate。max_size() 返回容器支持的最大元素数量，超过该上限的请求在申请空间前被拒绝。
+下标 `operator[]`、`front()`、`back()` 和 `at()` 按第三节开头的约定，对标 C++20 的 `std::vector`。
 
 #### 3.1.3 实现思路
 
@@ -243,7 +243,7 @@ easySTL 与 easypool 两个库互不依赖，仅集成测试同时使用它们�
 
 先区分已有元素的数量和当前容量。对一个空 vector 调用 reserve(4)，再追加两个元素，此时 size() 为2，capacity() 至少为4：前者表示已经构造了多少个元素，后者表示当前已分配的空间最多能容纳多少个元素。
 
-已经分配空间时，`end_ - begin_` 计算 size()，`capacity_end_ - begin_` 计算 capacity()；没有分配空间时，两者直接返回0，不对空指针相减。后续继续追加，空间不足就重新分配，capacity() 可以随之增大。
+已经分配空间时，`end_ - begin_` 计算 size()，`capacity_end_ - begin_` 计算 capacity()；没有分配空间时，两者直接返回0，不对空指针相减，也不形成 nullptr+0。后续继续追加，空间不足就重新分配，capacity() 可以随之增大。
 
 那么，容量最多能增大到多少？vector 用 max_size() 返回理论上支持的最大元素数量，与标准库接口的含义一致。它不根据当前指针计算：空容器的 capacity() 可以为0，但 max_size() 仍表示以后允许申请的数量上限。
 
@@ -272,11 +272,13 @@ easySTL 与 easypool 两个库互不依赖，仅集成测试同时使用它们�
 
 `end_` 记录已有元素末尾之后的位置，`[begin_, end_)` 表示已有元素的范围。追加或删除元素时，vector 需要在相应位置构造或销毁对象，并更新 `end_`。
 
-- **容量内的 push_back**：当 `size() < capacity()` 时，vector 直接在 `end_` 指向的空位调用 `std::construct_at`，构造新元素。只有构造成功，vector 才将 `end_` 向后移动一个位置，使 size 增加 1。如果构造抛出异常，`end_` 和 size 保持原值。新元素还没构造完成，这次追加也没有申请新空间，vector 无需销毁新元素或归还存储，可以让异常直接传给调用者。C++ 会自动销毁新元素中已经构造完成的成员和基类子对象。
-- **pop_back**：调用者必须保证容器非空。vector 先将 `end_` 向前移动一个位置，使它指向原来的最后一个元素，再调用 `std::destroy_at` 销毁该对象。操作完成后，size 减少1，原位置可供以后构造新元素。
+- **容量内的 push_back**：当 `size() < capacity()` 时，vector 直接在 `end`_ 指向的空位调用 `std::construct_at`，构造新元素。只有构造成功，vector 才将 `end_` 向后移动一个位置，使 size 增加 1。如果构造抛出异常，`end_` 和 size 保持原值。新元素还没构造完成，这次追加也没有申请新空间，vector 无需销毁新元素或归还存储，可以让异常直接传给调用者。C++ 会自动销毁新元素中已经构造完成的成员和基类子对象。
+- **pop_back**：调用者必须保证容器非空。vector 先将 `end`_ 向前移动一个位置，使它指向原来的最后一个元素，再调用 `std::destroy_at` 销毁该对象。操作完成后，size 减少1，原位置可供以后构造新元素。
 - **clear**：vector 逐个销毁所有已有元素，再将 `end_` 设为 `begin_`，使 size 变为0。容器本来就是空的时，vector 无需销毁任何元素。
 
 以上操作都不释放容器持有的整块存储，`begin_` 和 `capacity_end_` 保持不变，因此 capacity 也不变。pop_back 和 clear 只销毁元素对象，vector 以后仍可利用这些位置构造新元素。
+
+vector 析构时只销毁 `[begin_, end_)` 中的对象。容器持有存储时，再按容量调用 deallocate；尚未分配存储时不调用。分配器不记录哪些位置已经构造了元素，归还空间时也不会销毁它们，所以 vector 要先销毁对象，再按原来申请的数量归还整块空间。
 
 ##### reserve 复制失败时的清理
 
@@ -384,7 +386,7 @@ push_back(value):
 
 ##### reserve 复制失败的测试
 
-在 test/vector_exception_test.cpp 中，先定义一个保存整数值的测试类型：它记录成功构造、析构和当前存活对象的数量，并能在指定的第几次复制构造时抛出异常；析构不抛异常。普通 int 的复制不会抛异常，因此不能直接用 vector<int> 制造这个失败场景。
+在 test/vector_exception_test.cpp 中，先定义一个保存整数值的测试类型：它记录成功构造、析构和当前存活对象的数量，并能在指定的第几次复制构造时抛出异常；析构不抛异常。普通 int 的复制不会抛异常，因此不能直接用 vector 制造这个失败场景。
 
 使用 `easystl::vector<测试类型>` 准备3个元素，让它们保存的值依次为10、20、30。准备期间关闭复制故障，避免在追加元素时提前失败。准备完成后，保存元素值、data() 返回的存储地址、size() 返回的元素数量、capacity() 返回的容量，以及当前存活对象数量。
 
@@ -410,13 +412,13 @@ push_back(value):
 
 #### 3.2.2 实现要求
 
-增加拷贝构造、拷贝赋值和成员 swap(vector&)。副本使用独立存储；复制失败时来源保持原样，赋值失败时目标也保持原样。元素需要支持复制构造，容器移动仍显式删除。
+增加拷贝构造、拷贝赋值和成员 swap(vector&)。复制失败时来源保持原样，赋值失败时目标也保持原样。
 
 #### 3.2.3 实现思路
 
 ##### 拷贝构造与失败清理
 
-实现拷贝构造、拷贝赋值和 swap。拷贝构造先申请独立存储，再逐个复制元素；失败时清理已构造的对象并归还新存储。容器构造失败后不会调用该容器的析构函数，这些资源必须由当前操作清理。
+拷贝构造先申请独立存储，再逐个复制元素；失败时清理已构造的对象并归还新存储。容器构造失败后不会调用该容器的析构函数，这些资源必须由当前操作清理。
 
 ##### 拷贝赋值与交换
 
@@ -430,7 +432,7 @@ swap：交换三个指针，不逐个交换元素
 
 ##### 交换后的位置
 
-本阶段增加成员 swap(vector&)。交换后，指向元素的指针与引用仍指向原元素，但元素改由另一个容器持有；不依赖旧 end()，需要时重新取得。
+交换后，指向元素的指针与引用仍指向原元素，但元素改由另一个容器持有；不依赖旧 end()，需要时重新取得。
 
 #### 3.2.4 测试任务与检查要点
 
@@ -458,7 +460,7 @@ swap：交换三个指针，不逐个交换元素
 
 #### 3.3.2 实现要求
 
-增加单位置与区间 erase、resize(n)、resize(n,value)、insert(pos,value)、insert(pos,n,value)、assign(n,value)、数量值初始化与数量填充构造。插入位置可在 begin() 到 end() 之间，单位置删除则不能传入 end()；所有位置和区间都必须来自当前容器并满足顺序要求。零插入返回原位置；at 越界检查不能替代迭代器合法性约定。
+增加单位置与区间 erase、resize(n)、resize(n,value)、insert(pos,value)、insert(pos,n,value)、assign(n,value)、数量值初始化与数量填充构造。插入位置可在 begin() 到 end() 之间，单位置删除则不能传入 end()；所有位置和区间都必须来自当前容器并满足顺序要求。at 越界检查不能替代迭代器合法性约定。
 
 #### 3.3.3 实现思路
 
@@ -597,7 +599,7 @@ assign(n,value) 用新序列替换全部内容。先在局部容器中构造 n �
 | `vector_iterator<T>` | 默认构造、从指针显式构造；解引用、箭头、前后置递增递减、位置加减、距离、下标、相等与顺序比较 |
 | `iterator_traits<I>` | 从具有约定嵌套类型的迭代器提取 value_type、difference_type、pointer、reference、iterator_category；为对象指针 T* 提供偏特化 |
 | distance(first,last) | 返回有符号距离；支持同类型范围，也支持计划中的不同结束标记 |
-| advance(it,n) | 修改位置，按能力选择直接位移或逐步前进；双向来源支持合法后退，单向来源只接受非负位移 |
+| advance(it,n) | 按调用者给出的位移移动迭代器 |
 | vector 的位置接口 | iterator、const_iterator 分别指向自制可写与只读版本；begin/end/cbegin/cend、insert/erase 使用这些类型，data 仍返回指针 |
 | vector 的范围接口 | 增加范围构造、insert、assign 与初始化列表入口；支持数组、标准容器迭代器、单遍输入和本容器范围自插入 |
 
@@ -607,7 +609,7 @@ assign(n,value) 用新序列替换全部内容。先在局部容器中构造 n �
 
 ##### 从数组指针到位置对象
 
-先用独立数组 [10,20,30] 学习 *it、++it 和 it+2 的含义，再让 `vector_iterator<T>` 包装同一个数组地址。解引用返回 T&，箭头返回 T*；前置递增返回修改后的自身引用，后置递增返回修改前的位置副本。只移动位置，不复制、构造或销毁元素。
+先用独立数组 [10,20,30] 学习 *it、++it 和 it+2 的含义，再让* `vector_iterator<T>` *包装同一个数组地址。解引用返回 T&，箭头返回 T*；前置递增返回修改后的自身引用，后置递增返回修改前的位置副本。只移动位置，不复制、构造或销毁元素。
 
 随机访问还需要 n+it、it-n、it+=n、it-=n、it[n]、位置相减和各项比较，不能只提供 it+n 就认为接口完整。距离使用 std::ptrdiff_t。有效位移必须留在同一数组及其末尾之后的位置范围内，末尾位置不能解引用；不同容器的位置不作减法或顺序比较。
 
@@ -641,9 +643,7 @@ advance 同样使用自制 traits 的差值类型。随机访问来源直接位�
 
 ##### 接入 vector 的位置接口
 
-容器内部 begin_、end_、capacity_end_ 继续使用 T*。公开 iterator 和 const_iterator 分别是 `vector_iterator<T>` 与 `vector_iterator<const T>`；begin/end 只包装当前指针，data() 仍用于直接查询存储地址。
-
-为包装类提供 base()，返回其保存的指针。insert/erase 接收 const_iterator，由容器在合法位置前提下取得指针、保存偏移并调用原有构造和赋值逻辑；返回值重新包装操作后的正确位置。空状态单独处理，扩容前保存偏移，扩容后不能返回旧迭代器。后文实现伪代码中的 pos、old_end 等继续表示解包后的内部指针，公开接口使用迭代器包装；此前的位置失效规则不因多了一层包装而改变。
+容器内部的 begin_、end_ 和 capacity_end_ 继续保存 T*。begin() 和 end() 只把当前指针装进迭代器，data() 仍返回指针。包装类提供 base()，返回它保存的指针。insert 和 erase 接收 const_iterator；容器在位置合法时取出指针、记下偏移，再按原来的构造和赋值步骤修改元素，返回时重新包装操作之后的位置。空容器单独处理。扩容前先记下偏移，扩容后不能返回旧迭代器。后文实现伪代码中的 pos、old_end 等继续表示解包后的内部指针，公开接口使用迭代器包装；此前的位置失效规则不因多了一层包装而改变。
 
 先完成这一替换，再运行阶段一至三的测试；只调整明确依赖原始指针类型的测试，其余调用方式应保持可用。迭代器不延长容器或元素寿命，不负责检查任意来源位置是否属于当前容器。
 
@@ -878,16 +878,16 @@ std::move 使表达式可交给移动操作，实际转移由选中的构造或�
 
 | 接口或信息 | 本阶段约定 |
 | --- | --- |
-| value_type | 用 using 声明为 T，供标准及后续自制 traits 查询 |
+| value_type | 声明为 T，供标准及后续自制 traits 查询 |
 | 默认构造与跨类型构造 | 不持有独立池，可无异常构造；支持从 `allocator<U>` 创建对应 `allocator<T>` |
-| allocate(n) | 返回可供 n 个 T 元素使用的 T*；检查数量及字节乘法，保证对齐，不构造实际元素 |
-| deallocate(p,n) | 按原来源与参数归还存储，不抛异常，不代替容器析构元素 |
-| max_size() | 返回存储大小计算允许的元素数量上限，不承诺请求一定分配成功 |
+| allocate(n) | 返回可供 n 个 T 元素使用的 T* |
+| deallocate(p,n) | 按申请时的地址和数量归还，不抛异常，也不销毁元素 |
+| max_size() | 返回本分配器允许的最大元素数量 |
 | 相等比较 | 本项目普通分配器实例可互相归还所分配的存储，比较相等；不可把此规则推广给有状态池分配器 |
 
-本项目约定 allocate(0) 返回 nullptr，deallocate(nullptr,0) 不做操作。非空归还必须来自匹配的分配器且数量为原值；不要求识别伪造参数或重复释放。支持普通与实现所支持的过度对齐，不实现编译期动态分配或完整标准库兼容协议。
+非空指针必须归还给当初申请它的分配器。本阶段不要求识别伪造参数或重复释放，也不实现编译期动态分配或完整的标准库兼容协议。
 
-将容器扩展为 `vector<T,Alloc=std::allocator<T>>`，新增保存指定分配器的构造入口，先通过 `std::allocator_traits<Alloc>` 统一申请、归还和查询上限。支持的分配器要求 value_type 与 T 一致、指针为普通 T*、deallocate 不抛异常；本阶段先使用无状态分配器。两种分配器对照通过后，再把默认参数改为 `easystl::allocator<T>`，显式使用标准版本的入口继续保留。
+将容器扩展为 `vector<T,Alloc=std::allocator<T>>`，并增加保存调用者所给分配器的构造入口。可用的分配器要求 value_type 与 T 一致，指针为普通 T*，deallocate 不抛异常。本阶段先使用无状态分配器。
 
 #### 3.6.3 实现思路
 
@@ -971,9 +971,7 @@ vector 要通过 p+i 定位每个位置，所以 allocate 的结果必须支持 
 
 #### 3.7.2 实现要求
 
-把前面说明的内存池类命名为 MemoryPool，在 easypool/include/easypool.h 声明，在 easypool/src/easypool.cpp 定义，使用 easypool 命名空间。它对外仍提供申请和归还操作，分别命名为 Allocate 和 Deallocate。
-
-池只管理存储，调用者负责元素对象；支持小块复用、超出池化范围的系统分配回退，以及析构时释放底层大块。接口合法参数、内部状态与具体策略见下面的实现思路。
+把前面说明的内存池类命名为 MemoryPool，在 easypool/include/easypool.h 声明，在 easypool/src/easypool.cpp 定义，使用 easypool 命名空间。对外的申请和归还分别命名为 Allocate 和 Deallocate。
 
 #### 3.7.3 实现思路
 
@@ -1167,7 +1165,7 @@ Refill(block_size):
 
 ##### 参数与对齐检查
 
-测试先覆盖非零申请的 alignment=0、3，确认抛 invalid_argument；再检查合法对齐地址。alignas(64) 可作为示例，但只有 alignof(测试类型) 大于 `__STDCPP_DEFAULT_NEW_ALIGNMENT__`，才会命中带对齐参数的系统分配分支。选择当前实现支持且超过该默认值的类型；如果环境没有可用类型，记录该分支未覆盖。
+测试先覆盖非零申请的 alignment=0、3，确认抛 invalid_argument；再检查合法对齐地址。alignas(64) 可作为示例，但只有 alignof(测试类型) 大于 `__STDCPP_DEFAULT_NEW_ALIGNMENT_`_，才会命中带对齐参数的系统分配分支。选择当前实现支持且超过该默认值的类型；如果环境没有可用类型，记录该分支未覆盖。
 
 检查地址数值除以 alignment 的余数是否为0，保存结果后按原参数释放，再报告失败，不读取尚未构造的对象。
 
@@ -1223,11 +1221,11 @@ Refill(block_size):
 | pointer、const_pointer | 固定为 value_type* 与 const value_type* |
 | size_type、difference_type | 固定使用 std::size_t 与 std::ptrdiff_t |
 | allocate(a,n)、deallocate(a,p,n) | 转发给分配器的对应成员，不接管存储所有权 |
-| max_size(a) | 有可调用的 const max_size 时使用它，否则按 size_t 上限和元素大小计算 |
+| max_size(a) | 返回该分配器允许的最大元素数量 |
 
-只支持当前容器使用的普通指针与标准构造销毁工具，不实现特殊指针、construct/destroy 定制、重绑定和完整传播特征。分配器 max_size 与 deallocate 按本项目约定不抛异常。先运行简化工具的独立测试，再替换 vector 中标准 allocator_traits 的申请、归还和上限查询调用。
+只支持当前容器使用的普通指针与标准构造销毁工具，不实现特殊指针、construct/destroy 定制、重绑定和完整传播特征。分配器的 max_size 和 deallocate 按本项目约定不抛异常。
 
-新增 test/pool_allocator.h，定义保存已有 MemoryPool 指针的 `pool_allocator<T>`，对接字节数和对齐参数；两库仍互不依赖。阶段六已提供 Alloc 类型参数和自制普通默认分配器，这里不重复改造容器模板。补齐有状态分配器的资源规则，最后建立根 Makefile 汇总入口。
+新增 test/pool_allocator.h，供 vector 通过已有的 MemoryPool 申请元素存储。两个库仍然互不依赖。阶段六已提供 Alloc 类型参数和自制普通默认分配器，这里不重复改造容器模板。本阶段还要补齐有状态分配器的资源规则，并建立根 Makefile 汇总入口。
 
 #### 3.8.3 实现思路
 
